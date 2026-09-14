@@ -1,11 +1,13 @@
 // Delega una tarea de codigo a DeepSeek (Fireworks) desde CUALQUIER sesion de Claude Code, sin cambiar de sesion.
 // Lanza un Claude Code headless cuyo modelo es DeepSeek, via el gateway local :4141.
 // El hijo corre sin hooks ni MCP (no consume cupo de Claude) y no puede commitear ni pushear.
+// Cada delegacion usa su propia ruta /run/<id> del gateway, asi el costo reportado es exacto aunque haya varias en paralelo.
 //
 // Uso:  node fw-delegate.mjs --cwd <proyecto> [--timeout <min>] [--model <id>] [--task-file <archivo>] < encargo
 //       (el encargo va por stdin o en --task-file)
 
 import { spawn, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -57,9 +59,9 @@ function readStdin() {
   });
 }
 
-function usageSince(startIso) {
+function usageForRun(runId) {
   const prices = JSON.parse(fs.readFileSync(path.join(HERE, "prices.json"), "utf8"));
-  const total = { calls: 0, input: 0, cached: 0, output: 0, usd: 0 };
+  const total = { calls: 0, aborted: 0, input: 0, cached: 0, output: 0, usd: 0 };
   if (!fs.existsSync(LEDGER)) return total;
   for (const line of fs.readFileSync(LEDGER, "utf8").split("\n")) {
     if (!line.trim()) continue;
@@ -69,9 +71,10 @@ function usageSince(startIso) {
     } catch {
       continue;
     }
-    if (entry.source !== "coder" || entry.ts < startIso) continue;
+    if (entry.run_id !== runId) continue;
     const p = prices[entry.model] || { input: 0, cached_input: 0, output: 0 };
     total.calls++;
+    if (entry.aborted) total.aborted++;
     total.input += entry.input_tokens;
     total.cached += entry.cached_input_tokens;
     total.output += entry.output_tokens;
@@ -120,7 +123,7 @@ if (!health || !health.fireworksKey) {
 }
 
 const model = opts.model;
-const startIso = new Date().toISOString();
+const runId = `fw-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const started = Date.now();
 const args = [
   "-p",
@@ -136,7 +139,7 @@ const args = [
 // Todo el trafico del hijo (incluidos los modelos "rapidos" internos) va a Fireworks.
 const env = {
   ...process.env,
-  ANTHROPIC_BASE_URL: GATEWAY,
+  ANTHROPIC_BASE_URL: `${GATEWAY}/run/${runId}`,
   ENABLE_TOOL_SEARCH: "true",
   ANTHROPIC_DEFAULT_OPUS_MODEL: model,
   ANTHROPIC_DEFAULT_SONNET_MODEL: model,
@@ -166,14 +169,16 @@ const exitCode = await new Promise((resolve) => child.on("close", resolve));
 clearTimeout(timer);
 
 const result = parseResult(stdout);
-const usage = usageSince(startIso);
+const usage = usageForRun(runId);
 const seconds = Math.round((Date.now() - started) / 1000);
 const failed = !result || result.is_error || exitCode !== 0;
 
 console.log(`## Resultado de ${model} (${seconds}s${result ? `, ${result.num_turns} turnos` : ""}${failed ? ", CON ERROR" : ""})`);
 console.log(result && result.result ? result.result : `(sin resultado parseable; exit=${exitCode})\n${stdout.slice(-2000)}\n${stderr.slice(-2000)}`);
 console.log("\n## Consumo en Fireworks");
-console.log(`${usage.calls} llamadas | tokens in ${usage.input} / cache ${usage.cached} / out ${usage.output} | USD ${usage.usd.toFixed(4)}`);
+console.log(
+  `${usage.calls} llamadas${usage.aborted ? ` (${usage.aborted} cortadas)` : ""} | tokens in ${usage.input} / cache ${usage.cached} / out ${usage.output} | USD ${usage.usd.toFixed(4)} | run ${runId}`,
+);
 console.log("\n## git status");
 console.log(gitStatus(opts.cwd));
 process.exit(failed ? 1 : 0);

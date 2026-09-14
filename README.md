@@ -33,7 +33,7 @@ node C:/Programacion/claude-model-gateway/fw-delegate.mjs --cwd <proyecto> [--ti
 ENCARGO
 ```
 
-Si lanzas delegaciones en paralelo, el consumo que reporta cada una incluye el de las otras que coincidieron en el tiempo. El total diario de `claude-gateway usage` sí es exacto.
+Cada delegación usa su propia ruta del gateway (`/run/<id>`), así que el consumo que reporta es exacto aunque lances varias en paralelo.
 
 ## Comandos
 
@@ -46,6 +46,9 @@ Si lanzas delegaciones en paralelo, el consumo que reporta cada una incluye el d
 ## Rastro de gasto
 
 - **Ledger:** `~/.claude-gateway/usage.jsonl`, con una línea por llamada a Fireworks (`source=coder`).
+  - `run_id`: la delegación a la que pertenece. Sale del prefijo `/run/<id>` de `ANTHROPIC_BASE_URL`.
+  - `aborted: true`: la respuesta se cortó; el gateway corta también la conexión con Fireworks para que no siga generando.
+  - `estimated: true`: Fireworks solo manda el conteo real al final del stream, así que si se cortó antes los tokens se estiman (request/4 y deltas/4).
 - **claude-mem:** si algún día vuelve a usar Fireworks, `usage.ps1` importa también su consumo (`source=claude-mem:<perfil>`) desde los logs del worker.
 - **Precios:** `prices.json` (USD por 1M tokens, tier Standard). El costo se calcula al reportar.
 

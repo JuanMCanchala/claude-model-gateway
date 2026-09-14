@@ -1,7 +1,9 @@
 // Gateway local para Claude Code: enruta cada request segun el modelo.
 //   model deepseek-* (o accounts/fireworks/...) -> Fireworks (endpoint Anthropic nativo) con la key de Fireworks
 //   cualquier otro                              -> https://api.anthropic.com (passthrough intacto, tu sesion de Claude)
-// Cada llamada a Fireworks deja su consumo en ~/.claude-gateway/usage.jsonl (source=coder).
+// Cada llamada a Fireworks deja su consumo en ~/.claude-gateway/usage.jsonl (source=coder), tambien si se corta.
+// Prefijo opcional /run/<id> en la ruta (ANTHROPIC_BASE_URL=http://127.0.0.1:4141/run/<id>): etiqueta el consumo
+// con run_id para atribuir el costo exacto a cada delegacion aunque corran en paralelo.
 // Sin dependencias. Solo escucha en 127.0.0.1.
 
 import http from "node:http";
@@ -76,7 +78,20 @@ function extractUsage(contentType, text) {
   return total;
 }
 
-function recordUsage(model, usage) {
+// Tokens generados en un stream cortado antes del usage final: caracteres de los deltas / 4.
+function estimateStreamedTokens(text) {
+  let chars = 0;
+  for (const line of text.split("\n")) {
+    if (!line.startsWith("data: ")) continue;
+    try {
+      const delta = JSON.parse(line.slice(6)).delta;
+      if (delta) chars += (delta.text || delta.thinking || delta.partial_json || "").length;
+    } catch {}
+  }
+  return Math.ceil(chars / 4);
+}
+
+function recordUsage(model, usage, runId, aborted, estimated) {
   const entry = {
     ts: new Date().toISOString(),
     source: "coder",
@@ -85,6 +100,9 @@ function recordUsage(model, usage) {
     cached_input_tokens: usage.cache_read_input_tokens || 0,
     output_tokens: usage.output_tokens || 0,
   };
+  if (runId) entry.run_id = runId;
+  if (aborted) entry.aborted = true;
+  if (estimated) entry.estimated = true;
   if (!entry.input_tokens && !entry.output_tokens && !entry.cached_input_tokens) return;
   fs.appendFile(USAGE_FILE, `${JSON.stringify(entry)}\n`, () => {});
 }
@@ -157,11 +175,24 @@ function forward(req, res, { url, headers, body, label, started, onComplete }) {
       for (const h of HOP_BY_HOP) delete outHeaders[h];
       res.writeHead(up.statusCode || 502, outHeaders);
       const captured = [];
+      let ended = false;
       if (onComplete) up.on("data", (chunk) => captured.push(chunk));
       up.pipe(res);
+      const complete = (aborted) => {
+        if (onComplete) onComplete(up.statusCode, String(up.headers["content-type"] || ""), Buffer.concat(captured).toString("utf8"), aborted);
+      };
       up.on("end", () => {
+        ended = true;
         log(`${label} ${req.method} ${req.url} -> ${up.statusCode} ${Date.now() - started}ms`);
-        if (onComplete) onComplete(up.statusCode, String(up.headers["content-type"] || ""), Buffer.concat(captured).toString("utf8"));
+        complete(false);
+      });
+      // Si el cliente corta o se cae la conexion, lo ya consumido (al menos el input de message_start) igual se registra.
+      // Al destruir la peticion (cliente que corta) la respuesta emite "error"; sin este handler tumbaria el proceso.
+      up.on("error", () => {});
+      up.on("close", () => {
+        if (ended) return;
+        log(`${label} ${req.method} ${req.url} -> ${up.statusCode} CORTADO ${Date.now() - started}ms`);
+        complete(true);
       });
     },
   );
@@ -169,7 +200,8 @@ function forward(req, res, { url, headers, body, label, started, onComplete }) {
     log(`${label} ${req.method} ${req.url} -> ERROR ${err.message}`);
     sendError(res, 502, `upstream ${label}: ${err.message}`);
   });
-  req.on("close", () => {
+  // req "close" ya se emitio al terminar de leer el body; la desconexion del cliente se detecta en res.
+  res.on("close", () => {
     if (!res.writableEnded) upstream.destroy();
   });
   upstream.end(body);
@@ -177,6 +209,9 @@ function forward(req, res, { url, headers, body, label, started, onComplete }) {
 
 const server = http.createServer(async (req, res) => {
   const started = Date.now();
+  const run = req.url.match(/^\/run\/([A-Za-z0-9_-]{1,64})(\/.*)?$/);
+  const runId = run ? run[1] : "";
+  if (run) req.url = run[2] || "/";
 
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
@@ -226,14 +261,25 @@ const server = http.createServer(async (req, res) => {
     authorization: `Bearer ${key}`,
     "anthropic-version": req.headers["anthropic-version"] || "2023-06-01",
   };
+  const payload = Buffer.from(JSON.stringify(clean));
   forward(req, res, {
     url: new URL(FIREWORKS_URL + pathname),
     headers,
-    body: Buffer.from(JSON.stringify(clean)),
-    label: `fireworks[${clean.model}]`,
+    body: payload,
+    label: `fireworks[${clean.model}]${runId ? ` run=${runId}` : ""}`,
     started,
-    onComplete: (status, contentType, text) => {
-      if (status === 200) recordUsage(clean.model, extractUsage(contentType, text));
+    onComplete: (status, contentType, text, aborted) => {
+      if (status !== 200) return;
+      // Un stream que termina sin message_stop tambien cuenta como cortado.
+      const cut = aborted || (contentType.includes("text/event-stream") && !text.includes('"message_stop"'));
+      let usage = extractUsage(contentType, text);
+      let estimated = false;
+      // Fireworks solo manda el usage real en message_delta: si se corto antes, se estima para no perder el rastro.
+      if (cut && !usage.input_tokens && !usage.output_tokens) {
+        usage = { input_tokens: Math.ceil(payload.length / 4), output_tokens: estimateStreamedTokens(text) };
+        estimated = true;
+      }
+      recordUsage(clean.model, usage, runId, cut, estimated);
     },
   });
 });
