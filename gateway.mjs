@@ -20,8 +20,6 @@ const FIREWORKS_MODELS = {
   "deepseek-flash": "accounts/fireworks/models/deepseek-v4p1-flash",
   "deepseek-v4-pro": "accounts/fireworks/models/deepseek-v4-pro",
 };
-// La key se lee en cada request: si cambia no hace falta reiniciar el gateway.
-const KEY_FILES = [path.join(os.homedir(), ".claude-mem", ".env"), path.join(os.homedir(), ".claude-mem-funnelchat", ".env")];
 const STATE_DIR = path.join(os.homedir(), ".claude-gateway");
 const LOG_FILE = path.join(STATE_DIR, "gateway.log");
 const USAGE_FILE = path.join(STATE_DIR, "usage.jsonl");
@@ -42,15 +40,9 @@ function log(line) {
   fs.appendFile(LOG_FILE, `${new Date().toISOString()} ${line}\n`, () => {});
 }
 
+// La key llega por la variable FIREWORKS_API_KEY (claude-gateway.ps1 la inyecta desde la variable de usuario).
 function fireworksKey() {
-  if (process.env.FIREWORKS_API_KEY) return process.env.FIREWORKS_API_KEY;
-  for (const file of KEY_FILES) {
-    try {
-      const match = fs.readFileSync(file, "utf8").match(/^(?:FIREWORKS_API_KEY|OPENROUTER_API_KEY)=(.+)$/m);
-      if (match) return match[1].trim();
-    } catch {}
-  }
-  return "";
+  return process.env.FIREWORKS_API_KEY || "";
 }
 
 function resolveFireworksModel(model) {
