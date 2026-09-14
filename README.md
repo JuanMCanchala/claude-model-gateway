@@ -65,6 +65,24 @@ ENCARGO
 
 El uso de tokens de cada corrida queda en el ledger con `source=codex`. Como va incluido en el plan, sale a USD 0 en `claude-gateway usage`.
 
+## `/gemini`: delegar a Gemini CLI con tu cuenta de Google
+
+Es lo mismo que `/codex`, pero con **Gemini CLI** (`@google/gemini-cli`). Usa tu login de Google, que se hace una vez corriendo `gemini` y eligiendo _Sign in with Google_, o `GEMINI_API_KEY`. La skill está en `skills/gemini/`.
+
+`gemini-delegate.mjs` copia el motor CLI de [Houston](https://github.com/gethouston/houston) (MIT, © ja-818; código Rust previo a `a7a52b74`):
+
+- **Invocación:** `gemini -p "" --output-format stream-json --yolo --skip-trust --include-directories <cwd> [--model] [--resume latest]`, con el prompt por stdin.
+- **Instrucciones de sistema:** `coder-rules.md` va envuelto en `<system>…</system>` delante del encargo, porque el CLI no tiene flag de system prompt.
+- **Home aislado:** `HOME`/`USERPROFILE` apuntan a `~/.claude-gateway/gemini-home`, que solo contiene `oauth_creds.json`, `google_accounts.json` y `.env` (enlazados o copiados) más un `settings.json` mínimo. Así no se cuelan tu `GEMINI.md` global ni tus MCP.
+- **Sonda de auth antes de lanzar:** sin login, Gemini pregunta por stdin si abre el navegador y se come el encargo.
+- **Errores:** se clasifican por `result.error.type` (`FatalAuthenticationError`, `RetryableQuotaError`, `GaxiosError` 401/429/5xx, `MaxSessionTurnsError`) y por las líneas `Attempt N failed … Retrying after / Max attempts reached` de stderr.
+
+Diferencias con Houston:
+
+- Houston usaba `--yolo` sin límites; aquí se añade `--policy gemini-policy.toml`, que niega `git push/commit/reset/checkout`, borrados recursivos y publicar.
+- Se lanza el bundle JS con `node`, no el shim `.cmd`.
+- Los tokens van al ledger con `source=gemini` y salen a USD 0 en `claude-gateway usage`. Si usas `GEMINI_API_KEY` sí se factura, pero eso no se refleja aquí.
+
 ## Comandos
 
 | Comando                                             | Qué hace                                                                              |
@@ -99,6 +117,9 @@ coder-rules.md         reglas del implementador (system prompt añadido)
 skills/fireworks/      skill /fireworks (copiar a ~/.claude-<perfil>/skills/)
 codex-delegate.mjs     delegación headless a Codex con cuenta ChatGPT (usada por /codex)
 skills/codex/          skill /codex (copiar a ~/.claude-<perfil>/skills/)
+gemini-delegate.mjs    delegación headless a Gemini CLI con cuenta Google (usada por /gemini)
+gemini-policy.toml     política que niega git push/commit, borrados recursivos y publicar
+skills/gemini/         skill /gemini (copiar a ~/.claude-<perfil>/skills/)
 claude-gateway.ps1     start/stop/status/logs/usage
 usage.ps1              resumen de gasto
 claude-keys.ps1        alta de la key de Fireworks

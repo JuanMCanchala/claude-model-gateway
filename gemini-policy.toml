@@ -1,0 +1,23 @@
+# Politica del Policy Engine de Gemini CLI para gemini-delegate.mjs (se carga con --policy).
+# Houston lanzaba Gemini con --yolo sin restricciones; aqui se bloquean las acciones destructivas o de publicacion.
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = ["git push", "git commit", "git reset", "git checkout", "git clean", "git rebase"]
+decision = "deny"
+priority = 900
+denyMessage = "El orquestador revisa y commitea; el implementador no toca el historial de git."
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = ["rm -rf", "rm -fr", "Remove-Item -Recurse", "rmdir /s", "del /s", "format "]
+decision = "deny"
+priority = 900
+denyMessage = "Borrados recursivos bloqueados en delegaciones."
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = ["npm publish", "gh release", "gh repo delete"]
+decision = "deny"
+priority = 900
+denyMessage = "Publicar esta prohibido en delegaciones."
