@@ -1,0 +1,6 @@
+{
+  "name": "fireworks-coder",
+  "description": "Modo orquestación: Claude (Opus) orquesta y el subagente deepseek-coder programa con DeepSeek V4.1 Flash en Fireworks, vía el gateway local :4141. Solo se carga con flash-fw / funnelchat-fw.",
+  "version": "1.0.0",
+  "author": { "name": "Juan" }
+}
