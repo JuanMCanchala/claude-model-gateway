@@ -2,14 +2,7 @@
 
 Herramientas locales para que **Claude orqueste y DeepSeek V4.1 Flash (en Fireworks) programe** dentro de Claude Code, sin perder nada de lo tuyo: claude-mem, prompt-improver, skills, hooks y CLAUDE.md.
 
-Hay dos formas de usarlo:
-
-| Forma                                  | Cuándo                                               | Cómo                                                                                                                      |
-| -------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **`/fireworks <tarea>`** (recomendada) | Desde cualquier sesión normal, sin cambiar de sesión | Claude escribe el encargo, lo delega a un Claude Code sin interfaz que usa DeepSeek, revisa el resultado y te da el costo |
-| **`flash-fw` / `funnelchat-fw`**       | Sesiones enteras de orquestación                     | Toda la sesión pasa por el gateway y trae el subagente `fireworks-coder:deepseek-coder`                                   |
-
-`flash` / `funnelchat` siguen siendo Claude Code estándar.
+Se usa con **`/fireworks <tarea>`** desde cualquier sesión normal (`flash` / `funnelchat`), sin cambiar de sesión: Claude escribe el encargo, lo delega a un Claude Code sin interfaz que usa DeepSeek, revisa el resultado y te da el costo.
 
 ```
 Sesión normal (Opus) ──/fireworks──► node fw-delegate.mjs ──► claude -p --model deepseek-v4p1-flash
@@ -58,9 +51,9 @@ Si lanzas delegaciones en paralelo, el consumo que reporta cada una incluye el d
 
 ## Modelos
 
-| Uso                             | Modelo en Fireworks   | Entrada / caché / salida (USD/1M) |
-| ------------------------------- | --------------------- | --------------------------------- |
-| `/fireworks` y `deepseek-coder` | `deepseek-v4p1-flash` | 0.22 / 0.007 / 0.66               |
+| Uso          | Modelo en Fireworks   | Entrada / caché / salida (USD/1M) |
+| ------------ | --------------------- | --------------------------------- |
+| `/fireworks` | `deepseek-v4p1-flash` | 0.22 / 0.007 / 0.66               |
 
 claude-mem sigue con **Claude** (provider `claude`) y no pasa por aquí.
 
@@ -71,7 +64,6 @@ gateway.mjs            proxy + registro de consumo
 fw-delegate.mjs        delegación headless a DeepSeek (usada por /fireworks)
 coder-rules.md         reglas del implementador (system prompt añadido)
 skills/fireworks/      skill /fireworks (copiar a ~/.claude-<perfil>/skills/)
-plugin/                plugin de sesión para flash-fw / funnelchat-fw
 claude-gateway.ps1     start/stop/status/logs/usage
 usage.ps1              resumen de gasto
 claude-keys.ps1        alta de la key de Fireworks
@@ -95,4 +87,4 @@ prices.json            precios por modelo
 
 - DeepSeek no tiene caché de prompts de Anthropic, PDFs ni WebSearch. Fireworks sí aplica su propia caché de prefijos, que es barata.
 - Claude Code registra `unrecognized_model` para `deepseek-*`. Es solo un aviso.
-- Con una `ANTHROPIC_BASE_URL` que no es de Anthropic, Claude Code **apaga tool search**. Por eso los modos `-fw` y `fw-delegate` exportan `ENABLE_TOOL_SEARCH=true`.
+- Con una `ANTHROPIC_BASE_URL` que no es de Anthropic, Claude Code **apaga tool search**. Por eso `fw-delegate` exporta `ENABLE_TOOL_SEARCH=true`.

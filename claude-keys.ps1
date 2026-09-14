@@ -1,5 +1,5 @@
 # Guarda la API key de Fireworks sin imprimirla y deja el coder listo:
-#   - variable de usuario FIREWORKS_API_KEY (la usa el gateway para deepseek-coder y /fireworks)
+#   - variable de usuario FIREWORKS_API_KEY (la usa el gateway para /fireworks)
 # claude-mem NO se toca: sigue con su provider de Claude.
 # Enter vacio = no tocar nada.
 

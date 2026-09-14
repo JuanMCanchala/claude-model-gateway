@@ -4,7 +4,7 @@ param(
 )
 
 # Rastro de gasto en Fireworks. Ledger: ~/.claude-gateway/usage.jsonl (una linea por llamada).
-#   source=coder                -> lo escribe gateway.mjs (subagente deepseek-coder)
+#   source=coder                -> lo escribe gateway.mjs (delegaciones /fireworks)
 #   source=claude-mem:<perfil>  -> se importa aqui desde los logs del worker de claude-mem
 # -Sync solo importa; sin -Sync importa y muestra el resumen de los ultimos -Days dias.
 
