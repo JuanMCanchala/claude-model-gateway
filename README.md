@@ -35,6 +35,36 @@ ENCARGO
 
 Cada delegación usa su propia ruta del gateway (`/run/<id>`), así que el consumo que reporta es exacto aunque lances varias en paralelo.
 
+## `/codex`: delegar a Codex con tu cuenta de ChatGPT
+
+Es la misma idea que `/fireworks`, pero el implementador es **Codex** (`gpt-5.5` por defecto) y usa **tu sesión de ChatGPT** (`codex login`). No hay API key ni gateway, y no cuesta por token: cuenta contra el cupo del plan (ventana de 5 h + semanal). La skill está en `skills/codex/` y se copia a `~/.claude-<perfil>/skills/codex`.
+
+`codex-delegate.mjs` copia el enfoque del motor CLI de [Houston](https://github.com/gethouston/houston) (MIT, © ja-818; código Rust previo al commit `a7a52b74`):
+
+- **Invocación:** `codex exec --json --skip-git-repo-check -p <profile> -c model_reasoning_effort="…" --model … --cd … --sandbox workspace-write [resume <thread>] -`, con el encargo por stdin.
+  - Los flags globales van **antes** de `resume`.
+  - `-c model_reasoning_effort` va siempre, para que un valor raro en `config.toml` no rompa el CLI.
+- **Instrucciones de sistema** (`coder-rules.md` + reglas headless): van en un profile temporal `~/.codex/cmgw-tmp-*.config.toml` (`developer_instructions`), nunca en argv (límite de 32 767 caracteres de Windows). Se borra al terminar, y los restos de más de 24 h se limpian.
+- **Login:** se comprueba antes con `codex login status`. Si no se puede clasificar, se miran las claves de `auth.json`.
+- **Errores clasificados:**
+  - modelo no disponible con cuenta ChatGPT;
+  - sesión caducada (corre `codex login`);
+  - cupo agotado, con hora de reinicio;
+  - 429, 5xx y red.
+  - Se ignora el ruido de reconexiones y de los MCP de tu `config.toml`.
+- **Reanudar:** `--resume <thread>` sigue la misma sesión de Codex. Si ya no existe, se relanza como nueva.
+- **Timeout:** `taskkill /T /F`.
+
+A diferencia de Houston, que usaba `--dangerously-bypass-approvals-and-sandbox`, aquí va `--sandbox workspace-write`. En Windows escribe gracias a `[windows] sandbox = "elevated"` de tu `config.toml`, por eso no se usa `--ignore-user-config`.
+
+```bash
+node C:/Programacion/claude-model-gateway/codex-delegate.mjs --cwd <proyecto> [--effort low|medium|high|xhigh] [--model gpt-5.5] [--resume <thread>] <<'ENCARGO'
+...encargo...
+ENCARGO
+```
+
+El uso de tokens de cada corrida queda en el ledger con `source=codex`. Como va incluido en el plan, sale a USD 0 en `claude-gateway usage`.
+
 ## Comandos
 
 | Comando                                             | Qué hace                                                                              |
@@ -67,6 +97,8 @@ gateway.mjs            proxy + registro de consumo
 fw-delegate.mjs        delegación headless a DeepSeek (usada por /fireworks)
 coder-rules.md         reglas del implementador (system prompt añadido)
 skills/fireworks/      skill /fireworks (copiar a ~/.claude-<perfil>/skills/)
+codex-delegate.mjs     delegación headless a Codex con cuenta ChatGPT (usada por /codex)
+skills/codex/          skill /codex (copiar a ~/.claude-<perfil>/skills/)
 claude-gateway.ps1     start/stop/status/logs/usage
 usage.ps1              resumen de gasto
 claude-keys.ps1        alta de la key de Fireworks

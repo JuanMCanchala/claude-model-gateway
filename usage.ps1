@@ -71,7 +71,7 @@ function Show-Usage {
         $usd = 0
         if ($price) {
             $usd = ($r.input_tokens * $price.Value.input + $r.cached_input_tokens * $price.Value.cached_input + $r.output_tokens * $price.Value.output) / 1e6
-        } else { $unpriced[$r.model] = $true }
+        } elseif ($r.source -ne 'codex') { $unpriced[$r.model] = $true }  # codex va contra el plan de ChatGPT: USD 0
         [pscustomobject]@{
             Dia = $when.ToString('yyyy-MM-dd'); Fuente = $r.source; Modelo = ($r.model -replace '^accounts/fireworks/models/', '')
             In = $r.input_tokens; Cache = $r.cached_input_tokens; Out = $r.output_tokens; USD = $usd
