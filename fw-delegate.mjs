@@ -97,9 +97,13 @@ function parseResult(stdout) {
   return null;
 }
 
+// Solo lo que cambió dentro de --cwd y como mucho 40 líneas: todo lo que se imprime aquí lo lee el orquestador.
 function gitStatus(cwd) {
   try {
-    return execFileSync("git", ["-C", cwd, "status", "--short"], { encoding: "utf8" }).trim() || "(sin cambios)";
+    const out = execFileSync("git", ["-C", cwd, "status", "--short", "--", "."], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    if (!out) return "(sin cambios)";
+    const lines = out.split("\n");
+    return lines.length > 40 ? `${lines.slice(0, 40).join("\n")}\n... (${lines.length - 40} más)` : out;
   } catch {
     return "(no es un repo git)";
   }

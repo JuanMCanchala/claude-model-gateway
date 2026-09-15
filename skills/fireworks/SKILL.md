@@ -13,13 +13,19 @@ DeepSeek corre como un Claude Code aparte, sin interfaz. **No ve esta conversaci
 
 ## 1. Preparar el encargo
 
-Investiga solo lo necesario (Read/Grep/Glob) para escribir un encargo que se entienda sin contexto:
+El encargo es lo que más define el gasto: todo lo que pidas, DeepSeek lo razona y lo escribe, y la salida es lo caro (0.66 USD/1M frente a 0.007 la entrada en caché). Investiga solo lo necesario (Read/Grep/Glob) para escribir un encargo que se entienda sin contexto:
 
 - **Objetivo:** qué debe quedar funcionando.
 - **Archivos:** qué se crea o se modifica, con rutas.
-- **Comportamiento esperado** y casos borde relevantes.
+- **Criterios de aceptación:** comportamiento esperado y casos borde que importan.
 - **Restricciones:** patrones del proyecto a seguir y qué no tocar.
 - **Verificación:** el comando exacto que debe pasar.
+
+Límites del encargo:
+
+- **Solo lo que pidió el usuario.** No agregues requisitos, extras de diseño ni "mejoras". Si crees que algo suma, propónselo al usuario antes de delegar; no lo metas en el encargo.
+- **Qué, no cómo.** No dictes la implementación (código, reglas CSS, estructura interna) ni resuelvas tú el contenido para que DeepSeek lo copie; nombra solo el patrón del proyecto a seguir. Evita "usa exactamente" y conteos exactos salvo que sean un requisito real: obligan a DeepSeek a re-verificarlo todo en su razonamiento.
+- **Corto y proporcional.** Una tarea chica cabe en unas 15-40 líneas. Si pasa de ~60, divídela en varias delegaciones o recorta el alcance.
 
 Si la tarea es trivial (1-2 líneas), hazla tú directamente y díselo al usuario.
 
@@ -37,11 +43,13 @@ ENCARGO
 - Si hay partes independientes, lanza varias delegaciones en paralelo, una por parte y con archivos distintos.
 - Si sale `[fw] Gateway apagado o sin key`, dile al usuario que corra `claude-gateway status` o `claude-keys`.
 
-## 3. Revisar
+## 3. Revisar (sin rehacer el trabajo)
 
-- Lee el resultado y el `git status` que imprime el script.
-- Revisa el diff de los archivos tocados y **corre tú la verificación**. No te fíes solo del reporte.
-- Arreglos menores los haces tú. Si falló algo grande, vuelve a delegar con el error concreto.
+Revisar a fondo lo delegado es hacer el trabajo dos veces y se pierde el ahorro. La garantía es el comando de verificación del encargo, que DeepSeek corre y reporta: por eso debe probar de verdad el criterio de aceptación.
+
+- Lee solo lo que imprime el script: resultado, verificación, consumo y `git status`.
+- **Si la verificación pasó y no hay bloqueos, da la tarea por hecha.** No leas los archivos ni el diff, y no vuelvas a correr la verificación.
+- Solo intervén si el script salió con error, la verificación falló, hay bloqueos o `git status` muestra archivos fuera de lo pedido. Vuelve a delegar con el error concreto; arréglalo tú solo si es de 1-2 líneas.
 
 ## 4. Reportar al usuario
 

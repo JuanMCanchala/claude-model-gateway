@@ -135,7 +135,7 @@ prices.json            precios por modelo
 ## Qué adapta el gateway para Fireworks
 
 - Quita `cache_control`, las server tools (web_search, code_execution…), `container`, `mcp_servers`, `service_tier`, `top_k` y `context_management`.
-- `thinking`: Fireworks acepta `adaptive` y `disabled` tal cual; a `enabled` sin `budget_tokens` le agrega el budget, porque si no responde 400.
+- `thinking`: **tope de razonamiento** de 4 000 tokens (`CODER_THINKING_BUDGET`, `0` = sin tope). `adaptive` y `enabled` se convierten en `enabled` con ese budget, y si `max_tokens` no deja espacio se desactiva. Sin tope, DeepSeek llegó a gastar los 32k de salida pensando sin escribir nada. Medido con el mismo encargo pesado: adaptive 212 s / 26k tokens de salida / USD 0.018; budget 4k 137 s / 19k / USD 0.013; `reasoning_effort: low` 126 s / 17k / USD 0.012.
 - Construye los headers desde cero, así que el token OAuth de Claude **nunca** sale hacia Fireworks.
 - `count_tokens` se estima en local.
 

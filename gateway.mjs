@@ -22,6 +22,8 @@ const FIREWORKS_MODELS = {
   "deepseek-flash": "accounts/fireworks/models/deepseek-v4p1-flash",
   "deepseek-v4-pro": "accounts/fireworks/models/deepseek-v4-pro",
 };
+// Tope de tokens de razonamiento por llamada al coder (0 = sin tope). Medido: 4000 baja ~30% costo y ~40% tiempo.
+const THINKING_BUDGET = Number(process.env.CODER_THINKING_BUDGET ?? 4000);
 const STATE_DIR = path.join(os.homedir(), ".claude-gateway");
 const LOG_FILE = path.join(STATE_DIR, "gateway.log");
 const USAGE_FILE = path.join(STATE_DIR, "usage.jsonl");
@@ -144,14 +146,14 @@ function sanitizeForCoder(body) {
       delete body.tool_choice;
     }
   }
-  // Fireworks acepta adaptive/disabled tal cual, pero "enabled" exige budget_tokens (< max_tokens).
-  if (body.thinking && body.thinking.type === "enabled" && !body.thinking.budget_tokens) {
-    const maxTokens = Number(body.max_tokens) || 0;
-    if (maxTokens > 1024) {
-      body.thinking.budget_tokens = Math.min(16000, maxTokens - 1);
-    } else {
-      body.thinking = { type: "disabled" };
-    }
+  // Tope de razonamiento: sin tope, DeepSeek llegó a gastar los 32k de max_tokens pensando sin escribir nada.
+  // adaptive/enabled -> enabled con budget <= THINKING_BUDGET (Fireworks exige budget_tokens < max_tokens).
+  // CODER_THINKING_BUDGET=0 quita el tope: adaptive pasa tal cual y enabled sin budget recibe hasta 16000.
+  if (body.thinking && body.thinking.type !== "disabled" && !(body.thinking.type === "adaptive" && THINKING_BUDGET <= 0)) {
+    const limit = THINKING_BUDGET > 0 ? THINKING_BUDGET : 16000;
+    const asked = body.thinking.type === "enabled" ? Number(body.thinking.budget_tokens) || limit : limit;
+    const budget = Math.min(asked, limit, (Number(body.max_tokens) || 0) - 1);
+    body.thinking = budget >= 1024 ? { type: "enabled", budget_tokens: budget } : { type: "disabled" };
   }
   body.model = resolveFireworksModel(body.model);
   return body;
